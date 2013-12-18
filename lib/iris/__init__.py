@@ -104,6 +104,33 @@ import os
 import threading
 import warnings
 
+# Mock things that aren't available on the HPC at this entry point.
+import sys
+import mock
+sys.modules['scipy'] = mock.Mock()
+sys.modules['scipy.interpolate'] = mock.Mock()
+sys.modules['scipy.stats'] = mock.Mock()
+sys.modules['scipy.stats.mstats'] = mock.Mock()
+sys.modules['scipy.spatial'] = mock.Mock()
+sys.modules['scipy.interpolate'] = mock.Mock()
+sys.modules['scipy.interpolate.interpolate'] = mock.Mock()
+sys.modules['cartopy'] = mock.Mock()
+sys.modules['cartopy.crs'] = mock.Mock()
+sys.modules['iris.unit'] = mock.Mock()
+unit = mock.Mock()
+
+def mocked_unit(name, calendar=None):
+    unit = mock.Mock(name=name, unit=name, calendar=calendar)
+    unit.__str__ = lambda unit: str(name)
+    unit.__repr__ = lambda unit: 'MockUnit: {}'.format(name)
+    if calendar is not None:
+        unit.date2num = mock.Mock(side_effect=itertools.count())
+    unit.is_time_reference = mock.Mock(return_value=calendar is not None)
+    return unit
+
+unit.Unit = mock.Mock(side_effect=mocked_unit)
+unit.as_unit = lambda v, **kwarg: unit.Unit(v, **kwarg)
+
 import iris.config
 import iris.cube
 import iris._constraints

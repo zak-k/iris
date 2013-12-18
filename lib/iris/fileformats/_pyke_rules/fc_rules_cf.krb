@@ -1102,8 +1102,11 @@ fc_extras
                                      error=e_msg))
         else:
             # Add the dimension coordinate to the cube.
-            if data_dims:
-                cube.add_dim_coord(coord, data_dims)
+            if data_dims is not None and len(data_dims) == 1:
+	        try:
+                    cube.add_dim_coord(coord, data_dims[0])
+		except ValueError:
+		    cube.add_aux_coord(coord, data_dims[0])
             else:
                 # Scalar coords are placed in the aux_coords container.
                 cube.add_aux_coord(coord, data_dims)
