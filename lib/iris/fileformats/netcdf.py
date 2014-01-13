@@ -97,7 +97,11 @@ _FACTORY_DEFNS = {
     iris.aux_factory.HybridHeightFactory: _FactoryDefn(
         primary='delta',
         std_name='atmosphere_hybrid_height_coordinate',
-        formula_terms_format='a: {delta} b: {sigma} orog: {orography}'), }
+        formula_terms_format='a: {delta} b: {sigma} orog: {orography}'),
+    iris.aux_factory.HybridPressureFactory: _FactoryDefn(
+        primary='delta',
+        std_name='atmosphere_hybrid_sigma_pressure_coordinate',
+        formula_terms_format='ap: {delta} b: {sigma} ps: {surface_pressure}'), }
 
 
 class CFNameCoordMap(object):
@@ -399,8 +403,24 @@ def _load_aux_factory(engine, cf, filename, cube):
 
     """
     formula_type = engine.requires.get('formula_type')
+    def coord_from_var_name(name):
+	mapping = engine.provides['coordinates']
+	for coord, cf_var_name in engine.provides['coordinates']:
+	    if cf_var_name == name:
+		return coord
+	raise ValueError('Unable to find coordinate for variable '
+			 '{!r}'.format(name))
 
     if formula_type == 'atmosphere_hybrid_height_coordinate':
+        # Convert term names to coordinates (via netCDF variable names).
+        terms_to_var_names = engine.requires['formula_terms']
+        delta = coord_from_var_name(terms_to_var_names['a'])
+        sigma = coord_from_var_name(terms_to_var_names['b'])
+        orography = coord_from_var_name(terms_to_var_names['orog'])
+        factory = iris.aux_factory.HybridHeightFactory(delta, sigma, orography)
+        cube.add_aux_factory(factory)
+
+    elif formula_type == 'atmosphere_hybrid_sigma_pressure_coordinate':
         def coord_from_var_name(name):
             mapping = engine.provides['coordinates']
             for coord, cf_var_name in engine.provides['coordinates']:
@@ -410,10 +430,19 @@ def _load_aux_factory(engine, cf, filename, cube):
                              '{!r}'.format(name))
         # Convert term names to coordinates (via netCDF variable names).
         terms_to_var_names = engine.requires['formula_terms']
-        delta = coord_from_var_name(terms_to_var_names['a'])
+	# Hybrid sigma-pressure can be expressed as either
+	#   p = ap + b * ps
+	# or:
+	#   p = a * p0 + b * ps
+	try:
+            delta = coord_from_var_name(terms_to_var_names['ap'])
+	    reference_pressure = None
+	except KeyError:
+	    delta = coord_from_var_name(terms_to_var_names['a'])
+	    reference_pressure = coord_from_var_name(terms_to_var_names['p0'])
         sigma = coord_from_var_name(terms_to_var_names['b'])
-        orography = coord_from_var_name(terms_to_var_names['orog'])
-        factory = iris.aux_factory.HybridHeightFactory(delta, sigma, orography)
+        surface_pressure = coord_from_var_name(terms_to_var_names['ps'])
+        factory = iris.aux_factory.HybridPressureFactory(delta, sigma, surface_pressure, reference_pressure)
         cube.add_aux_factory(factory)
 
 
