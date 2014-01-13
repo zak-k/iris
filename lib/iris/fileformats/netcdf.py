@@ -421,13 +421,6 @@ def _load_aux_factory(engine, cf, filename, cube):
         cube.add_aux_factory(factory)
 
     elif formula_type == 'atmosphere_hybrid_sigma_pressure_coordinate':
-        def coord_from_var_name(name):
-            mapping = engine.provides['coordinates']
-            for coord, cf_var_name in engine.provides['coordinates']:
-                if cf_var_name == name:
-                    return coord
-            raise ValueError('Unable to find coordinate for variable '
-                             '{!r}'.format(name))
         # Convert term names to coordinates (via netCDF variable names).
         terms_to_var_names = engine.requires['formula_terms']
 	# Hybrid sigma-pressure can be expressed as either
