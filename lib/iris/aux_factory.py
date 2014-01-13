@@ -554,10 +554,13 @@ class HybridPressureFactory(AuxCoordFactory):
     """
     Defines a hybrid-pressure coordinate factory with the formula:
         p = ap + b * ps
+    or
+        p = a * p0 + b * ps
 
     """
 
-    def __init__(self, delta=None, sigma=None, surface_pressure=None):
+    def __init__(self, delta=None, sigma=None, surface_pressure=None,
+                 reference_pressure=None):
         """
         Creates a hybrid-height coordinate factory with the formula:
             p = ap + b * ps
@@ -567,11 +570,13 @@ class HybridPressureFactory(AuxCoordFactory):
         Args:
 
         * delta: Coord
-            The coordinate providing the `ap` term.
+            The coordinate providing the `ap` or `a` term.
         * sigma: Coord
             The coordinate providing the `b` term.
         * surface_pressure: Coord
             The coordinate providing the `ps` term.
+        * reference_pressure: Coord
+            The coordinate providing the `p0` term.
 
         """
         super(HybridPressureFactory, self).__init__()
@@ -587,23 +592,45 @@ class HybridPressureFactory(AuxCoordFactory):
                   ' These will be disregarded.'.format(surface_pressure.name())
             warnings.warn(msg, UserWarning, stacklevel=2)
 
+        if reference_pressure and reference_pressure.nbounds:
+            msg = 'Reference pressure coordinate {!r} has bounds.' \
+                  ' These will be disregarded.'.format(reference_pressure.name())
+            warnings.warn(msg, UserWarning, stacklevel=2)
+
         self.delta = delta
         self.sigma = sigma
         self.surface_pressure = surface_pressure
+        self.reference_pressure = reference_pressure
 
         self.standard_name = 'air_pressure'
         if delta is None and surface_pressure is None:
             raise ValueError('Unable to determine units: no delta or'
                              ' surface_pressure available.')
-        incompatible = (delta and surface_pressure and
-                        delta.units != surface_pressure.units)
-        if incompatible:
-            raise ValueError('Incompatible units: delta and surface_pressure'
-                             ' must have the same units.')
-        self.units = (delta and delta.units) or surface_pressure.units
+	if reference_pressure is None:
+            incompatible = (delta and surface_pressure and
+                            delta.units != surface_pressure.units)
+            if incompatible:
+                raise ValueError('Incompatible units: delta and surface_pressure'
+                                 ' must have the same units.')
+            self.units = (delta and delta.units) or surface_pressure.units
+        else:
+            incompatible = (surface_pressure and
+                            reference_pressure.units != surface_pressure.units)
+            if incompatible:
+                raise ValueError('Incompatible units: reference_pressure'
+                                 ' and surface_pressure must have the same'
+                                 ' units.')
+
+	    if delta and not delta.units.is_dimensionless():
+		raise ValueError('Invalid units: delta must be dimensionless if'
+                                 ' reference_pressure is specified')
+
+	    self.units = reference_pressure.units
+
         if not self.units.is_convertible('Pa'):
-            raise ValueError('Invalid units: delta and/or surface_pressure'
-                             ' must be expressed in pressure units.')
+            raise ValueError('Invalid units: delta, surface_pressure and/or'
+                             ' reference_pressure must be expressed in'
+                             ' pressure units.')
         self.attributes = {}
 
     @property
@@ -614,10 +641,11 @@ class HybridPressureFactory(AuxCoordFactory):
 
         """
         return {'delta': self.delta, 'sigma': self.sigma,
-                'surface_pressure': self.surface_pressure}
+                'surface_pressure': self.surface_pressure,
+                'reference_pressure': self.reference_pressure}
 
-    def _derive(self, delta, sigma, surface_pressure):
-        temp = delta + sigma * surface_pressure
+    def _derive(self, delta, sigma, surface_pressure, reference_pressure):
+        temp = delta * reference_pressure + sigma * surface_pressure
         return temp
 
     def make_coord(self, coord_dims_func):
@@ -645,7 +673,8 @@ class HybridPressureFactory(AuxCoordFactory):
         def calc_points():
             return self._derive(nd_points_by_key['delta'],
                                 nd_points_by_key['sigma'],
-                                nd_points_by_key['surface_pressure'])
+                                nd_points_by_key['surface_pressure'],
+                                nd_points_by_key['reference_pressure'])
         shape = self._shape(nd_points_by_key)
         points = LazyArray(shape, calc_points)
 
@@ -661,6 +690,7 @@ class HybridPressureFactory(AuxCoordFactory):
                 delta = nd_values_by_key['delta']
                 sigma = nd_values_by_key['sigma']
                 surface_pressure = nd_values_by_key['surface_pressure']
+                reference_pressure = nd_values_by_key['reference_pressure']
                 ok_bound_shapes = [(), (1,), (2,)]
                 if delta.shape[-1:] not in ok_bound_shapes:
                     raise ValueError('Invalid delta coordinate bounds.')
@@ -674,7 +704,15 @@ class HybridPressureFactory(AuxCoordFactory):
                         surface_pressure_pts.shape)
                     surface_pressure = surface_pressure_pts.reshape(
                         surface_pressure_pts_shape.append(1))
-                return self._derive(delta, sigma, surface_pressure)
+                if reference_pressure.shape[-1:] not in [(), (1,)]:
+                    warnings.warn('Reference pressure coordinate has bounds. '
+                                  'These are being disregarded.')
+                    reference_pressure_pts = nd_points_by_key['reference_pressure']
+                    reference_pressure_pts_shape = list(
+                        reference_pressure_pts.shape)
+                    reference_pressure = reference_pressure_pts.reshape(
+                        reference_pressure_pts_shape.append(1))
+                return self._derive(delta, sigma, surface_pressure, reference_pressure)
             b_shape = self._shape(nd_values_by_key)
             bounds = LazyArray(b_shape, calc_bounds)
 
@@ -714,3 +752,9 @@ class HybridPressureFactory(AuxCoordFactory):
                       'These will be disregarded.'.format(new_coord.name())
                 warnings.warn(msg, UserWarning, stacklevel=2)
             self.surface_pressure = new_coord
+        elif self.reference_pressure is old_coord:
+            if new_coord and new_coord.nbounds:
+                msg = 'Reference pressure coordinate {!r} has bounds. ' \
+                      'These will be disregarded.'.format(new_coord.name())
+                warnings.warn(msg, UserWarning, stacklevel=2)
+            self.reference_pressure = new_coord
