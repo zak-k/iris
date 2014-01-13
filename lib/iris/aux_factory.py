@@ -621,10 +621,6 @@ class HybridPressureFactory(AuxCoordFactory):
                                  ' and surface_pressure must have the same'
                                  ' units.')
 
-	    if delta and not delta.units.is_dimensionless():
-		raise ValueError('Invalid units: delta must be dimensionless if'
-                                 ' reference_pressure is specified')
-
 	    self.units = reference_pressure.units
 
         if not self.units.is_convertible('Pa'):
