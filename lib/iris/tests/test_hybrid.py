@@ -227,5 +227,50 @@ class TestHybridPressure(tests.IrisTest):
             bounds = pressure.bounds
 
 
+class TestHybridPressureWithReferencePressure(TestHybridPressure):
+    def setUp(self):
+	# Convert the "p = ap + b * ps" form to "p = a * p0 + b * ps"
+	super(TestHybridPressureWithReferencePressure, self).setUp()
+
+	# Construct a scalar reference pressure coordinate (1000hPa)
+	ref = iris.coords.AuxCoord( np.float32(1e5),
+				    long_name='reference_air_pressure',
+				    units='Pa' )
+	self.cube.add_aux_coord(ref)
+
+        # Get rid of the existing hybrid-pressure factory.
+        factory = self.cube.aux_factory(name='air_pressure')
+        self.cube.remove_aux_factory(factory)
+
+        # Mangle the level pressure coord into a dimensionless one
+        delta = self.cube.coord('level_pressure')
+        delta.rename('delta')
+        delta.units = '1'
+	delta = delta.copy(points = delta.points / ref.points,
+			   bounds = delta.bounds / ref.points)
+	self.cube.replace_coord(delta)
+
+        sigma = self.cube.coord('sigma')
+        surf = self.cube.coord('surface_air_pressure')
+
+        factory = HybridPressureFactory(delta, sigma, surf, ref)
+        self.cube.add_aux_factory(factory)
+        self.air_pressure = self.cube.coord('air_pressure')
+
+    def test_invalid_dependencies(self):
+        # Must have either delta or surface_air_pressure
+        ref = self.cube.coord('reference_air_pressure')
+        with self.assertRaises(ValueError):
+            factory = HybridPressureFactory(reference_pressure=ref)
+
+        # Reference pressure must not have bounds
+        sigma = self.cube.coord('sigma')
+        with warnings.catch_warnings():
+            # Cause all warnings to raise Exceptions
+            warnings.simplefilter("error")
+            with self.assertRaises(UserWarning):
+                factory = HybridPressureFactory(reference_pressure=sigma)
+
+
 if __name__ == "__main__":
     tests.main()
