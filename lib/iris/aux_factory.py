@@ -641,7 +641,10 @@ class HybridPressureFactory(AuxCoordFactory):
                 'reference_pressure': self.reference_pressure}
 
     def _derive(self, delta, sigma, surface_pressure, reference_pressure):
-        temp = delta * reference_pressure + sigma * surface_pressure
+	if reference_pressure:
+            temp = delta * reference_pressure + sigma * surface_pressure
+	else:
+            temp = delta + sigma * surface_pressure
         return temp
 
     def make_coord(self, coord_dims_func):
