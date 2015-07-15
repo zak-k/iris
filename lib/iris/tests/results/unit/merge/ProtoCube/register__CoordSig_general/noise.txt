@@ -1,6 +1,0 @@
-failed to merge into a single cube.
-  Coordinates in cube.aux_coords (scalar) differ: liff, life, like, moog, mong, ming.
-  Coordinates in cube.dim_coords differ: altitude, equinomity, longitude, equinumity, latitude, equinimity.
-  Coordinates in cube.aux_coords (non-scalar) differ: cee, three, bee, two, ay, one.
-  Coordinate-to-dimension mapping differs for cube.aux_coords (non-scalar).
-  cube.aux_factories() differ
